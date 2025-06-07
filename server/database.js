@@ -6,10 +6,10 @@ dotenv.config();
 
 // Create MySQL connection pool
 export const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'schedule_db',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -30,7 +30,7 @@ export async function initializeDatabase() {
 async function createTables() {
   const connection = await pool.getConnection();
   try {
-    // 1. Groups table (создается первой, так как на нее ссылаются другие)
+    // 1. Groups table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS groups_table (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -40,7 +40,7 @@ async function createTables() {
       )
     `);
 
-    // 2. Teachers table (создается второй, так как на нее ссылаются другие)
+    // 2. Teachers table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS teachers (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -52,7 +52,7 @@ async function createTables() {
       )
     `);
 
-    // 3. Rooms table (независимая таблица)
+    // 3. Rooms table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS rooms (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -63,7 +63,7 @@ async function createTables() {
       )
     `);
 
-    // 4. Users table (зависит от groups и teachers)
+    // 4. Users table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -80,7 +80,7 @@ async function createTables() {
       )
     `);
 
-    // 5. Subjects table (зависит от teachers)
+    // 5. Subjects table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS subjects (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -92,7 +92,7 @@ async function createTables() {
       )
     `);
 
-    // 6. Schedule table (зависит от всех кроме grades)
+    // 6. Schedule table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS schedule (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -111,7 +111,7 @@ async function createTables() {
       )
     `);
 
-    // 7. Grades table (создается последней, так как зависит от users, subjects и teachers)
+    // 7. Grades table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS grades (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -145,52 +145,13 @@ async function insertInitialData() {
     const [existingAdmin] = await connection.query('SELECT * FROM users WHERE email = ?', ['admin@university.ru']);
     
     if (!existingAdmin || existingAdmin.length === 0) {
-      // Create admin user
+      // Create admin user only
       const hashedPassword = await bcrypt.hash('password', 10);
       await connection.query(`
         INSERT INTO users (name, email, password, role) 
         VALUES (?, ?, ?, ?)
       `, ['Administrator', 'admin@university.ru', hashedPassword, 'admin']);
       console.log('✅ Admin user created');
-    }
-
-    // Check if groups exist
-    const [existingGroups] = await connection.query('SELECT COUNT(*) as count FROM groups_table');
-    if (existingGroups[0].count === 0) {
-      // Insert groups
-      const groups = [
-        ['ИС-21', 'Информационные системы, 2021 год'],
-        ['ИС-22', 'Информационные системы, 2022 год'],
-        ['ПИ-21', 'Программная инженерия, 2021 год'],
-        ['ПИ-22', 'Программная инженерия, 2022 год'],
-        ['КБ-21', 'Кибербезопасность, 2021 год']
-      ];
-
-      for (const [name, description] of groups) {
-        await connection.query('INSERT INTO groups_table (name, description) VALUES (?, ?)', [name, description]);
-      }
-      console.log('✅ Groups created');
-    }
-
-    // Check if teachers exist
-    const [existingTeachers] = await connection.query('SELECT COUNT(*) as count FROM teachers');
-    if (existingTeachers[0].count === 0) {
-      // Insert teachers
-      const teachers = [
-        ['Смирнов В.А.', 'smirnov@university.ru', '+7 (495) 123-45-67', 'Кафедра математики'],
-        ['Волкова Е.Н.', 'volkova@university.ru', '+7 (495) 234-56-78', 'Кафедра информатики'],
-        ['Морозов А.В.', 'morozov@university.ru', '+7 (495) 345-67-89', 'Кафедра физики'],
-        ['Лебедева О.П.', 'lebedeva@university.ru', '+7 (495) 456-78-90', 'Кафедра иностранных языков'],
-        ['Новиков С.М.', 'novikov@university.ru', '+7 (495) 567-89-01', 'Кафедра экономики']
-      ];
-
-      for (const [name, email, phone, department] of teachers) {
-        await connection.query(
-          'INSERT INTO teachers (name, email, phone, department) VALUES (?, ?, ?, ?)',
-          [name, email, phone, department]
-        );
-      }
-      console.log('✅ Teachers created');
     }
 
     console.log('✅ Initial data checked/inserted successfully');

@@ -1,46 +1,55 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, MapPin, User, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addDays, startOfWeek, isSameDay } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { useAuth } from '../context/AuthContext';
-import { scheduleEntries, groups, subjects, teachers, rooms } from '../data/mockData';
-import { ScheduleView as ScheduleViewType } from '../types';
+import { apiService } from '../services/api';
+import { ScheduleView as ScheduleViewType, Group } from '../types';
 
 const ScheduleView: React.FC = () => {
   const { user } = useAuth();
+  const [scheduleData, setScheduleData] = useState<ScheduleViewType[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'day' | 'week'>('week');
+  const [loading, setLoading] = useState(true);
 
-  const scheduleData: ScheduleViewType[] = useMemo(() => {
-    return scheduleEntries.map(entry => {
-      const subject = subjects.find(s => s.id === entry.subjectId);
-      const teacher = teachers.find(t => t.id === entry.teacherId);
-      const group = groups.find(g => g.id === entry.groupId);
-      const room = rooms.find(r => r.id === entry.roomId);
+  useEffect(() => {
+    fetchData();
+  }, [user, selectedGroup]);
 
-      return {
-        ...entry,
-        subjectName: subject?.name || '',
-        teacherName: teacher?.name || '',
-        groupName: group?.name || '',
-        roomName: room?.name || ''
-      };
-    });
-  }, []);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch schedule based on user role
+      let scheduleFilters: any = {};
+      
+      if (user?.role === 'student' && user.groupId) {
+        scheduleFilters.groupId = user.groupId;
+      } else if (user?.role === 'admin' && selectedGroup) {
+        scheduleFilters.groupId = selectedGroup;
+      }
+
+      const [scheduleResponse, groupsResponse] = await Promise.all([
+        apiService.getSchedule(scheduleFilters),
+        user?.role === 'admin' ? apiService.getGroups() : Promise.resolve([])
+      ]);
+
+      setScheduleData(scheduleResponse);
+      if (user?.role === 'admin') {
+        setGroups(groupsResponse);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredSchedule = useMemo(() => {
     let filtered = scheduleData;
-
-    // Filter by user role
-    if (user?.role === 'student' && user.groupId) {
-      filtered = filtered.filter(entry => entry.groupId === user.groupId);
-    }
-
-    // Filter by selected group (for admin)
-    if (selectedGroup && user?.role === 'admin') {
-      filtered = filtered.filter(entry => entry.groupId === selectedGroup);
-    }
 
     // Filter by date range based on view mode
     if (viewMode === 'day') {
@@ -61,7 +70,7 @@ const ScheduleView: React.FC = () => {
       if (dateCompare !== 0) return dateCompare;
       return a.timeStart.localeCompare(b.timeStart);
     });
-  }, [scheduleData, user, selectedGroup, selectedDate, viewMode]);
+  }, [scheduleData, selectedDate, viewMode]);
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const days = viewMode === 'day' ? 1 : 7;
@@ -77,6 +86,14 @@ const ScheduleView: React.FC = () => {
     return filteredSchedule.filter(entry => isSameDay(new Date(entry.date), date));
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -86,7 +103,7 @@ const ScheduleView: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-900">Расписание занятий</h2>
             <p className="text-gray-600 mt-1">
               {user?.role === 'student' && user.groupId
-                ? `Группа ${groups.find(g => g.id === user.groupId)?.name}`
+                ? `Группа ${groups.find(g => g.id === user.groupId)?.name || ''}`
                 : 'Управление расписанием'
               }
             </p>

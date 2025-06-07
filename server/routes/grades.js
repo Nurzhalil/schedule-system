@@ -5,7 +5,7 @@ import { authenticateToken } from './auth.js';
 const router = express.Router();
 
 // Get grades for a specific student
-router.get('/student/:studentId', authenticateToken, (req, res) => {
+router.get('/student/:studentId', authenticateToken, async (req, res) => {
   try {
     const { studentId } = req.params;
     
@@ -14,7 +14,7 @@ router.get('/student/:studentId', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Доступ запрещен' });
     }
 
-    const grades = query(`
+    const grades = await query(`
       SELECT 
         g.*,
         s.name as subject_name,
@@ -35,8 +35,40 @@ router.get('/student/:studentId', authenticateToken, (req, res) => {
   }
 });
 
+// Get grade averages for a student
+router.get('/student/:studentId/averages', authenticateToken, async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    // Check if user can access these grades
+    if (req.user.role === 'student' && req.user.userId !== parseInt(studentId)) {
+      return res.status(403).json({ error: 'Доступ запрещен' });
+    }
+
+    const averages = await query(`
+      SELECT 
+        s.id as subject_id,
+        s.name as subject_name,
+        t.name as teacher_name,
+        AVG(g.grade) as average_grade,
+        COUNT(g.id) as total_grades
+      FROM grades g
+      JOIN subjects s ON g.subject_id = s.id
+      JOIN teachers t ON g.teacher_id = t.id
+      WHERE g.student_id = ?
+      GROUP BY s.id, s.name, t.name
+      ORDER BY s.name
+    `, [studentId]);
+
+    res.json(averages);
+  } catch (error) {
+    console.error('Error fetching student averages:', error);
+    res.status(500).json({ error: 'Ошибка получения средних оценок' });
+  }
+});
+
 // Get grades for a specific teacher's subjects
-router.get('/teacher/:teacherId', authenticateToken, (req, res) => {
+router.get('/teacher/:teacherId', authenticateToken, async (req, res) => {
   try {
     const { teacherId } = req.params;
     
@@ -45,7 +77,7 @@ router.get('/teacher/:teacherId', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Доступ запрещен' });
     }
 
-    const grades = query(`
+    const grades = await query(`
       SELECT 
         g.*,
         s.name as subject_name,
@@ -67,13 +99,13 @@ router.get('/teacher/:teacherId', authenticateToken, (req, res) => {
 });
 
 // Get all grades (admin only)
-router.get('/all', authenticateToken, (req, res) => {
+router.get('/all', authenticateToken, async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Доступ запрещен' });
     }
 
-    const grades = query(`
+    const grades = await query(`
       SELECT 
         g.*,
         s.name as subject_name,
@@ -94,7 +126,7 @@ router.get('/all', authenticateToken, (req, res) => {
 });
 
 // Create new grade (teacher and admin only)
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
     if (req.user.role === 'student') {
       return res.status(403).json({ error: 'Доступ запрещен' });
@@ -111,14 +143,14 @@ router.post('/', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Вы можете добавлять оценки только по своим предметам' });
     }
 
-    const result = query(
+    const result = await query(
       'INSERT INTO grades (student_id, subject_id, teacher_id, grade, grade_type, description, date) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [studentId, subjectId, teacherId, grade, gradeType, description || null, date]
     );
 
     res.status(201).json({ 
       message: 'Оценка добавлена',
-      gradeId: result.lastInsertRowid
+      gradeId: result.insertId
     });
 
   } catch (error) {
@@ -128,7 +160,7 @@ router.post('/', authenticateToken, (req, res) => {
 });
 
 // Update grade (teacher and admin only)
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     if (req.user.role === 'student') {
       return res.status(403).json({ error: 'Доступ запрещен' });
@@ -139,18 +171,18 @@ router.put('/:id', authenticateToken, (req, res) => {
 
     // Check if teacher can update this grade
     if (req.user.role === 'teacher') {
-      const existingGrade = query('SELECT teacher_id FROM grades WHERE id = ?', [id])[0];
-      if (!existingGrade || existingGrade.teacher_id !== req.user.teacherId) {
+      const existingGrade = await query('SELECT teacher_id FROM grades WHERE id = ?', [id]);
+      if (!existingGrade.length || existingGrade[0].teacher_id !== req.user.teacherId) {
         return res.status(403).json({ error: 'Вы можете изменять только свои оценки' });
       }
     }
 
-    const result = query(
+    const result = await query(
       'UPDATE grades SET grade = ?, grade_type = ?, description = ?, date = ? WHERE id = ?',
       [grade, gradeType, description || null, date, id]
     );
 
-    if (result.changes === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Оценка не найдена' });
     }
 
@@ -163,7 +195,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 });
 
 // Delete grade (teacher and admin only)
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     if (req.user.role === 'student') {
       return res.status(403).json({ error: 'Доступ запрещен' });
@@ -173,15 +205,15 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
     // Check if teacher can delete this grade
     if (req.user.role === 'teacher') {
-      const existingGrade = query('SELECT teacher_id FROM grades WHERE id = ?', [id])[0];
-      if (!existingGrade || existingGrade.teacher_id !== req.user.teacherId) {
+      const existingGrade = await query('SELECT teacher_id FROM grades WHERE id = ?', [id]);
+      if (!existingGrade.length || existingGrade[0].teacher_id !== req.user.teacherId) {
         return res.status(403).json({ error: 'Вы можете удалять только свои оценки' });
       }
     }
 
-    const result = query('DELETE FROM grades WHERE id = ?', [id]);
+    const result = await query('DELETE FROM grades WHERE id = ?', [id]);
 
-    if (result.changes === 0) {
+    if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Оценка не найдена' });
     }
 

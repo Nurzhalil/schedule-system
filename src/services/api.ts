@@ -50,7 +50,7 @@ class ApiService {
   }
 
   // Schedule
-  async getSchedule(filters: { groupId?: number; teacherId?: number; date?: string } = {}) {
+  async getSchedule(filters: { groupId?: number; teacherId?: number; date?: string; subjectId?: number } = {}) {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined) {
@@ -69,17 +69,30 @@ class ApiService {
     });
   }
 
+  async updateScheduleEntry(id: number, entry: any) {
+    return this.request(`/schedule/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(entry),
+    });
+  }
+
+  async deleteScheduleEntry(id: number) {
+    return this.request(`/schedule/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Grades
   async getStudentGrades(studentId: number) {
     return this.request(`/grades/student/${studentId}`);
   }
 
-  async getStudentGradesBySubject(studentId: number, subjectId: number) {
-    return this.request(`/grades/student/${studentId}/subject/${subjectId}`);
-  }
-
   async getStudentGradeAverages(studentId: number) {
     return this.request(`/grades/student/${studentId}/averages`);
+  }
+
+  async getTeacherGrades(teacherId: number) {
+    return this.request(`/grades/teacher/${teacherId}`);
   }
 
   async addGrade(grade: any) {
@@ -89,21 +102,114 @@ class ApiService {
     });
   }
 
+  async updateGrade(id: number, grade: any) {
+    return this.request(`/grades/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(grade),
+    });
+  }
+
+  async deleteGrade(id: number) {
+    return this.request(`/grades/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Data
   async getGroups() {
     return this.request('/data/groups');
+  }
+
+  async addGroup(group: any) {
+    return this.request('/data/groups', {
+      method: 'POST',
+      body: JSON.stringify(group),
+    });
+  }
+
+  async updateGroup(id: number, group: any) {
+    return this.request(`/data/groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(group),
+    });
+  }
+
+  async deleteGroup(id: number) {
+    return this.request(`/data/groups/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   async getTeachers() {
     return this.request('/data/teachers');
   }
 
+  async addTeacher(teacher: any) {
+    return this.request('/data/teachers', {
+      method: 'POST',
+      body: JSON.stringify(teacher),
+    });
+  }
+
+  async updateTeacher(id: number, teacher: any) {
+    return this.request(`/data/teachers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(teacher),
+    });
+  }
+
+  async deleteTeacher(id: number) {
+    return this.request(`/data/teachers/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getSubjects() {
     return this.request('/data/subjects');
   }
 
+  async addSubject(subject: any) {
+    return this.request('/data/subjects', {
+      method: 'POST',
+      body: JSON.stringify(subject),
+    });
+  }
+
+  async updateSubject(id: number, subject: any) {
+    return this.request(`/data/subjects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(subject),
+    });
+  }
+
+  async deleteSubject(id: number) {
+    return this.request(`/data/subjects/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getRooms() {
     return this.request('/data/rooms');
+  }
+
+  async addRoom(room: any) {
+    return this.request('/data/rooms', {
+      method: 'POST',
+      body: JSON.stringify(room),
+    });
+  }
+
+  async updateRoom(id: number, room: any) {
+    return this.request(`/data/rooms/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(room),
+    });
+  }
+
+  async deleteRoom(id: number) {
+    return this.request(`/data/rooms/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   async getStudentsByGroup(groupId: number) {
